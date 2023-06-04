@@ -1,0 +1,243 @@
+@startuml
+class com.storage.engine.exceptions.BufferException {
+}
+class com.storage.engine.StorageDB {
++ {static} int RESERVED_KEY_MARKER
+- {static} String FILE_NAME_DATA
+- {static} String FILE_NAME_WAL
+- {static} String FILE_TYPE_NEXT
+- IndexMap index
+- BitSet dataInWalFile
+- ReentrantReadWriteLock rwLock
+- RandomAccessFilePool filePool
+- Buffer buffer
+- long lastBufferFlushTimeMs
+- int recordSize
+- long bytesInWalFile
+- File dbDirFile
+- Config conf
+~ CompactionState compactionState
+- File dataFile
+- File walFile
+- DataOutputStream walOut
+- Thread tWorker
+- Object compactionSync
+- Object compactionLock
+- boolean shutDown
+- boolean useExecutorService
+~ Throwable exceptionDuringBackgroundOps
+- {static} Logger LOG
+- {static} ExecutorService executorService
+- {static} ArrayList<StorageDB> instancesServed
+- {static} Object commonCompactionSync
+- {static} boolean esShutDown
++ {static} void initExecutorService(int)
+- void initWalOut()
+- boolean shouldFlushBuffer()
+- boolean shouldCompact()
+- boolean isWalFileBigEnough(File)
+- void buildIndex()
+- void buildIndexFromFile(boolean)
+- void recover()
+- Path move(File,File)
+- boolean isCompactionInProgress()
++ void compact()
+- void flushNext(OutputStream,Buffer)
++ void put(byte[],byte[],int)
++ void put(byte[],byte[])
++ void put(int,byte[])
++ void put(int,byte[],int)
++ void flush()
++ void iterate(EntryConsumer)
+- void iterate(boolean,boolean,EntryConsumer)
++ byte[] randomGet(int)
++ void close()
++ {static} void shutDownExecutorService()
++ Config getConf()
++ boolean isUsingExecutorService()
++ int size()
+}
+class com.storage.engine.utilities.BlockUtility {
+- {static} Logger LOG
+~ {static} File rewriteBlocks(File,int)
++ {static} File verifyBlocks(File,int)
+}
+class com.storage.engine.exceptions.StorageDBException {
+}
+class com.storage.engine.StorageDBBuilder {
+~ Config conf
++ StorageDBBuilder withAutoCompactDisabled()
++ StorageDBBuilder withValueSize(int)
++ StorageDBBuilder withDbDir(String)
++ StorageDBBuilder withCompactionWaitTimeoutMs(long)
++ StorageDBBuilder withMinBuffersToCompact(int)
++ StorageDBBuilder withDataToWalFileRatio(int)
++ StorageDBBuilder withBufferFlushTimeoutMs(long)
++ StorageDBBuilder withMaxBufferSize(int)
++ StorageDBBuilder withIndexMap(IndexMap)
++ StorageDBBuilder withDbDir(Path)
++ StorageDBBuilder withMaxOpenFDCount(int)
++ StorageDB build()
+}
+interface com.storage.engine.map.IndexMap {
+~ void put(int,int)
+~ int get(int)
+~ int size()
+}
+interface com.storage.engine.EntryConsumer {
+~ void accept(int,byte[],int)
+}
+class com.storage.engine.utilities.ByteUtility {
++ {static} int toInt(byte[],int)
++ {static} boolean arrayEquals(byte[],Deque<Byte>)
+}
+class com.storage.engine.exceptions.StorageDBRuntimeException {
+}
+class com.storage.engine.exceptions.RetainedKeyException {
+}
+class com.storage.engine.exceptions.ExcessValueSizeException {
+}
+class com.storage.engine.map.IndexMapImpl {
+- TIntIntHashMap indexMap
+- {static} int CAPACITY
+- {static} float LOAD_FACTOR
++ void put(int,int)
++ int get(int)
++ int size()
+}
+class com.storage.engine.exceptions.IncoherentDataException {
+}
+class com.storage.engine.exceptions.ConfigException {
+}
+class com.storage.engine.file_access.RandomAccessFileWrapper {
+- File file
++ boolean isSameFile(File)
++ File getFile()
+}
+class com.storage.engine.file_access.RandomAccessFileFactory {
++ PooledObject<RandomAccessFileWrapper> makeObject(File)
++ void destroyObject(File,PooledObject<RandomAccessFileWrapper>)
++ boolean validateObject(File,PooledObject<RandomAccessFileWrapper>)
++ void activateObject(File,PooledObject<RandomAccessFileWrapper>)
++ void passivateObject(File,PooledObject<RandomAccessFileWrapper>)
+}
+class com.storage.engine.file_access.RandomAccessFilePool {
+- {static} GenericKeyedObjectPoolConfig<RandomAccessFileWrapper> getConfig(int)
++ RandomAccessFileWrapper borrowObject(File)
+}
+class com.storage.engine.Config {
++ {static} int RECORDS_PER_BLOCK
++ {static} int CRC_SIZE
++ {static} int KEY_SIZE
+~ {static} int MAX_VALUE_SIZE
+- {static} long DEFAULT_COMPACTION_WAIT_TIMEOUT_MS
+~ {static} long MIN_COMPACTION_WAIT_TIMEOUT_MS
+- {static} int DEFAULT_MIN_BUFFERS_TO_COMPACT
+~ {static} int FLOOR_MIN_BUFFERS_TO_COMPACT
+- {static} int DEFAULT_DATA_TO_WAL_FILE_RATIO
+~ {static} int MIN_DATA_TO_WAL_FILE_RATIO
+~ {static} int MAX_DATA_TO_WAL_FILE_RATIO
+- {static} long DEFAULT_BUFFER_FLUSH_TIMEOUT_MS
+- {static} int DEFAULT_MAX_BUFFER_SIZE
+- {static} int DEFAULT_OPEN_FD_COUNT
+~ {static} int MIN_OPEN_FD_COUNT
+~ {static} int MAX_OPEN_FD_COUNT
+~ boolean autoCompact
+~ int valueSize
+~ String dbDir
+~ IndexMap indexMap
+~ long compactionWaitTimeoutMs
+~ int minBuffersToCompact
+~ int dataToWalFileRatio
+~ long bufferFlushTimeoutMs
+~ int maxBufferSize
+~ int openFDCount
++ boolean autoCompactEnabled()
++ int getValueSize()
++ String getDbDir()
++ {static} long getDefaultCompactionWaitTimeoutMs()
++ long getCompactionWaitTimeoutMs()
++ boolean isAutoCompact()
++ void setAutoCompact(boolean)
++ void setValueSize(int)
++ void setDbDir(String)
++ void setIndexMap(IndexMap)
++ void setCompactionWaitTimeoutMs(long)
++ void setMinBuffersToCompact(int)
++ void setDataToWalFileRatio(int)
++ void setBufferFlushTimeoutMs(long)
++ void setMaxBufferSize(int)
++ void setOpenFDCount(int)
++ int getMinBuffersToCompact()
++ int getDataToWalFileRatio()
++ long getBufferFlushTimeoutMs()
++ int getMaxBufferSize()
++ int getOpenFDCount()
++ IndexMap getIndexMap()
+}
+class com.storage.engine.utilities.RecordUtility {
++ {static} int blockSizeWithTrailer(int)
++ {static} long indexToAddress(int,long)
++ {static} int addressToIndex(int,long)
+}
+class com.storage.engine.CompactionState {
++ {static} int TIME
+- long begin
+~ long nextFileRecordIndex
+~ BitSet dataInNextFile
+~ BitSet dataInNextWalFile
+~ File nextWalFile
+~ File nextDataFile
++ long getNextFileRecordIndex()
++ void setNextFileRecordIndex(long)
++ BitSet getDataInNextFile()
++ void setDataInNextFile(BitSet)
++ BitSet getDataInNextWalFile()
+~ boolean isLimitation()
++ void setDataInNextWalFile(BitSet)
++ File getNextWalFile()
++ long getBegin()
++ void setNextWalFile(File)
++ File getNextDataFile()
++ void setNextDataFile(File)
+}
+class com.storage.engine.Buffer {
+- ByteBuffer byteBuffer
+- int valueSize
+- int recordSize
+- boolean readOnly
+- Config dbConfig
+- int maxRecords
+~ int capacity()
+~ int calculateMaxRecords()
++ int getMaxRecords()
+~ int getWriteBufferSize()
++ int flush(OutputStream)
+~ void readFromFiles(List<RandomAccessFile>,boolean,Consumer<ByteBuffer>)
+~ void readFromFile(RandomAccessFile,boolean,Consumer<ByteBuffer>)
+- int fillBuffer(RandomAccessFile,Consumer<ByteBuffer>,boolean)
+~ byte[] array()
+~ boolean isDirty()
+~ boolean isFull()
++ int add(int,byte[],int)
+~ boolean update(int,byte[],int,int)
+~ Enumeration<ByteBuffer> iterator(boolean)
+- void closeBlock()
++ {static} byte[] getSyncMarker(int)
+# void insertSyncMarker()
++ void clear()
+}
+
+
+com.storage.engine.exceptions.StorageDBRuntimeException <|-- com.storage.engine.exceptions.BufferException
+com.storage.engine.exceptions.Exception <|-- com.storage.engine.exceptions.StorageDBException
+com.storage.engine.exceptions.RuntimeException <|-- com.storage.engine.exceptions.StorageDBRuntimeException
+com.storage.engine.exceptions.RuntimeException <|-- com.storage.engine.exceptions.RetainedKeyException
+com.storage.engine.exceptions.StorageDBRuntimeException <|-- com.storage.engine.exceptions.ExcessValueSizeException
+com.storage.engine.map.IndexMap <|.. com.storage.engine.map.IndexMapImpl
+com.storage.engine.exceptions.StorageDBRuntimeException <|-- com.storage.engine.exceptions.IncoherentDataException
+com.storage.engine.exceptions.StorageDBRuntimeException <|-- com.storage.engine.exceptions.ConfigException
+java.io.RandomAccessFile <|-- com.storage.engine.file_access.RandomAccessFileWrapper
+org.apache.commons.pool2.KeyedPooledObjectFactory <|.. com.storage.engine.file_access.RandomAccessFileFactory
+org.apache.commons.pool2.impl.GenericKeyedObjectPool <|-- com.storage.engine.file_access.RandomAccessFilePool
+@enduml

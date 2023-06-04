@@ -1,0 +1,465 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > Buffer</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.storage.engine</a>
+</div>
+
+<h1>Coverage Summary for Class: Buffer (com.storage.engine)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Buffer</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (19/19)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (91/91)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">Buffer$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (10/10)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$1c37nnvd</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$5tdBReS0</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$9bOVilyo</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$aw5Jgx3U</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$c9wjpob5</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$DhziLKob</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$fhzJA01Z</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$Gqa6hBs7</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$IvusPy4t</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$ix1fDuEp</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$JJuOdaLk</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$KT4P9Xig</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$OuHpc2zy</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$rB9gybNz</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$rdA4Omgl</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$u3ftbccb</td>
+  </tr>
+  <tr>
+    <td class="name">Buffer$MockitoMock$1507201836$auxiliary$YcpsOyCN</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (22/22)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (101/101)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.storage.engine;
+&nbsp;
+&nbsp;import static com.storage.engine.StorageDB.RESERVED_KEY_MARKER;
+&nbsp;
+&nbsp;import com.storage.engine.exceptions.BufferException;
+&nbsp;import com.storage.engine.exceptions.StorageDBRuntimeException;
+&nbsp;import com.storage.engine.exceptions.ExcessValueSizeException;
+&nbsp;import com.storage.engine.utilities.RecordUtility;
+&nbsp;
+&nbsp;import java.io.IOException;
+&nbsp;import java.io.OutputStream;
+&nbsp;import java.io.RandomAccessFile;
+&nbsp;import java.nio.ByteBuffer;
+&nbsp;import java.util.Arrays;
+&nbsp;import java.util.Enumeration;
+&nbsp;import java.util.List;
+&nbsp;import java.util.function.Consumer;
+&nbsp;import java.util.zip.CRC32;
+&nbsp;
+&nbsp;/**
+&nbsp; * The {@link Buffer} is a logical extension of the WAL file. For a random get, if the index points
+&nbsp; * to an offset greater than that of the actual WAL file, then it&#39;s assumed to be in the write
+&nbsp; * buffer.
+&nbsp; */
+&nbsp;public class Buffer {
+&nbsp;
+&nbsp;    private ByteBuffer byteBuffer;
+&nbsp;    private final int valueSize;
+&nbsp;    private final int recordSize;
+&nbsp;    private final boolean readOnly;
+&nbsp;    private final Config dbConfig;
+&nbsp;    private final int maxRecords;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Initialises a write buffer for the WAL file with the following specification:
+&nbsp;     * &lt;ol&gt;
+&nbsp;     *     &lt;li&gt;Calculates how many records can fit within a 4 MB buffer&lt;/li&gt;
+&nbsp;     *     &lt;li&gt;If it turns out to be less than {@link Config#RECORDS_PER_BLOCK}, it chooses 128
+&nbsp;     *     (this will happen for very large values)&lt;/li&gt;
+&nbsp;     *     &lt;li&gt;Now, make this a multiple of 128&lt;/li&gt;
+&nbsp;     *     &lt;li&gt;Then calculate how many CRCs and sync markers need to be accommodated&lt;/li&gt;
+&nbsp;     *     &lt;li&gt;Finally, initialise a write buffer of the sum of bytes required&lt;/li&gt;
+&nbsp;     * &lt;/ol&gt;
+&nbsp;     *
+&nbsp;     * @param dbConfig Configuration using which db instance is produced
+&nbsp;     * @param readOnly Whether buffer is read only.
+&nbsp;     */
+<b class="fc">&nbsp;    public Buffer(final Config dbConfig, final boolean readOnly) {</b>
+<b class="fc">&nbsp;        this.valueSize = dbConfig.getValueSize();</b>
+<b class="fc">&nbsp;        this.recordSize = valueSize + Config.KEY_SIZE;</b>
+<b class="fc">&nbsp;        this.readOnly = readOnly;</b>
+<b class="fc">&nbsp;        this.dbConfig = dbConfig;</b>
+<b class="fc">&nbsp;        if (valueSize &gt; Config.MAX_VALUE_SIZE) {</b>
+<b class="fc">&nbsp;            throw new ExcessValueSizeException();</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        this.maxRecords = calculateMaxRecords();</b>
+&nbsp;
+<b class="fc">&nbsp;        final int blocks = this.maxRecords / Config.RECORDS_PER_BLOCK;</b>
+&nbsp;
+&nbsp;        // Each block will have 1 CRC and 1 sync marker (the sync marker is one kv pair)
+<b class="fc">&nbsp;        final int writeBufferSize = blocks * Config.RECORDS_PER_BLOCK * recordSize</b>
+&nbsp;                + (blocks * (Config.CRC_SIZE + recordSize));
+&nbsp;
+<b class="fc">&nbsp;        byteBuffer = ByteBuffer.allocate(writeBufferSize);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    int capacity() {
+<b class="fc">&nbsp;        return byteBuffer.capacity();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    int calculateMaxRecords() {
+<b class="fc">&nbsp;        int recordsToBuffer = Math.max(dbConfig.getMaxBufferSize() / recordSize, Config.RECORDS_PER_BLOCK);</b>
+&nbsp;
+&nbsp;        // Get to the nearest multiple of 128.
+<b class="fc">&nbsp;        recordsToBuffer = (recordsToBuffer / Config.RECORDS_PER_BLOCK) * Config.RECORDS_PER_BLOCK;</b>
+<b class="fc">&nbsp;        return recordsToBuffer;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public int getMaxRecords() {
+<b class="fc">&nbsp;        return maxRecords;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    int getWriteBufferSize() {
+<b class="fc">&nbsp;        return byteBuffer.capacity();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public int flush(final OutputStream out) throws IOException {
+<b class="fc">&nbsp;        if (readOnly) {</b>
+<b class="fc">&nbsp;            throw new BufferException(&quot;Initialised in read only mode!&quot;);</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        if (byteBuffer.position() == 0) {</b>
+<b class="fc">&nbsp;            return 0;</b>
+&nbsp;        }
+&nbsp;
+&nbsp;        // Fill the block with the last record, if required.
+<b class="fc">&nbsp;        while ((RecordUtility.addressToIndex(recordSize, byteBuffer.position()))</b>
+&nbsp;                % Config.RECORDS_PER_BLOCK != 0) {
+<b class="fc">&nbsp;            final int key = byteBuffer.getInt(byteBuffer.position() - recordSize);</b>
+<b class="fc">&nbsp;            add(key, byteBuffer.array(), byteBuffer.position() - recordSize + Config.KEY_SIZE);</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;
+<b class="fc">&nbsp;        final int bytes = byteBuffer.position();</b>
+<b class="fc">&nbsp;        out.write(byteBuffer.array(), 0, bytes);</b>
+<b class="fc">&nbsp;        out.flush();</b>
+<b class="fc">&nbsp;        return bytes;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    void readFromFiles(List&lt;RandomAccessFile&gt; files,
+&nbsp;                       final boolean reverse, final Consumer&lt;ByteBuffer&gt; recordConsumer) throws IOException {
+<b class="fc">&nbsp;        for (RandomAccessFile file : files) {</b>
+<b class="fc">&nbsp;            readFromFile(file, reverse, recordConsumer);</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    void readFromFile(final RandomAccessFile file, final boolean reverse,
+&nbsp;                      final Consumer&lt;ByteBuffer&gt; recordConsumer)
+&nbsp;            throws IOException {
+<b class="fc">&nbsp;        final int blockSize = RecordUtility.blockSizeWithTrailer(recordSize);</b>
+&nbsp;
+<b class="fc">&nbsp;        if (reverse) {</b>
+<b class="fc">&nbsp;            if (file.getFilePointer() % blockSize != 0) {</b>
+<b class="fc">&nbsp;                throw new StorageDBRuntimeException(&quot;Inconsistent data for iteration!&quot;);</b>
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            while (file.getFilePointer() != 0) {</b>
+<b class="fc">&nbsp;                byteBuffer.clear();</b>
+<b class="fc">&nbsp;                final long validBytesRemaining = file.getFilePointer() - byteBuffer.capacity();</b>
+<b class="fc">&nbsp;                file.seek(Math.max(validBytesRemaining, 0));</b>
+&nbsp;
+<b class="fc">&nbsp;                fillBuffer(file, recordConsumer, true);</b>
+&nbsp;
+&nbsp;                // Set the position again, since the read op moved the cursor ahead.
+<b class="fc">&nbsp;                file.seek(Math.max(validBytesRemaining, 0));</b>
+<b class="fc">&nbsp;            }</b>
+&nbsp;        } else {
+&nbsp;            while (true) {
+<b class="fc">&nbsp;                byteBuffer.clear();</b>
+<b class="fc">&nbsp;                final int bytesRead = fillBuffer(file, recordConsumer, false);</b>
+<b class="fc">&nbsp;                if (bytesRead &lt; blockSize) {</b>
+<b class="fc">&nbsp;                    break;</b>
+&nbsp;                }
+<b class="fc">&nbsp;            }</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    private int fillBuffer(RandomAccessFile file, Consumer&lt;ByteBuffer&gt; recordConsumer,
+&nbsp;                           boolean reverse)
+&nbsp;            throws IOException {
+<b class="fc">&nbsp;        final int bytesRead = file.read(byteBuffer.array());</b>
+<b class="fc">&nbsp;        if (bytesRead == -1) { // No more data.</b>
+<b class="fc">&nbsp;            return 0;</b>
+&nbsp;        }
+<b class="fc">&nbsp;        byteBuffer.position(bytesRead);</b>
+<b class="fc">&nbsp;        byteBuffer.limit(bytesRead);</b>
+&nbsp;
+&nbsp;        // Note: There&#39;s the possibility that we&#39;ll read the head of the file twice,
+&nbsp;        // but that&#39;s okay, since we iterate in a backwards fashion.
+<b class="fc">&nbsp;        final Enumeration&lt;ByteBuffer&gt; iterator = iterator(reverse);</b>
+<b class="fc">&nbsp;        while (iterator.hasMoreElements()) {</b>
+<b class="fc">&nbsp;            recordConsumer.accept(iterator.nextElement());</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return bytesRead;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    byte[] array() {
+<b class="fc">&nbsp;        return byteBuffer.array();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    boolean isDirty() {
+<b class="fc">&nbsp;        return byteBuffer.position() &gt; 0;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    boolean isFull() {
+<b class="fc">&nbsp;        return byteBuffer.remaining() == 0; // Perfect alignment, so this works.</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public int add(int key, byte[] value, int valueOffset) {
+<b class="fc">&nbsp;        if (readOnly) {</b>
+<b class="fc">&nbsp;            throw new BufferException(&quot;Initialised in read only mode!&quot;);</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        if (byteBuffer.position() % RecordUtility.blockSizeWithTrailer(recordSize) == 0) {</b>
+<b class="fc">&nbsp;            insertSyncMarker();</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        final int address = byteBuffer.position();</b>
+&nbsp;
+<b class="fc">&nbsp;        byteBuffer.putInt(key);</b>
+<b class="fc">&nbsp;        byteBuffer.put(value, valueOffset, valueSize);</b>
+&nbsp;
+&nbsp;        // Should we close this block?
+&nbsp;        // Don&#39;t close the block if the we&#39;re adding the sync marker kv pair.
+<b class="fc">&nbsp;        final int nextRecordIndex = RecordUtility.addressToIndex(recordSize, byteBuffer.position());</b>
+<b class="fc">&nbsp;        if (nextRecordIndex % Config.RECORDS_PER_BLOCK == 0) {</b>
+<b class="fc">&nbsp;            closeBlock();</b>
+&nbsp;        }
+<b class="fc">&nbsp;        return address;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Attempts to update a key in the in-memory buffer after verifying the key.
+&nbsp;     *
+&nbsp;     * @param key             The key to be updated
+&nbsp;     * @param newValue        The byte array containing the new value
+&nbsp;     * @param valueOffset     The offset in the value byte array
+&nbsp;     * @param addressInBuffer The address in the buffer at which the key value pair exists
+&nbsp;     * @return true if the update succeeds after key verification, false otherwise
+&nbsp;     */
+&nbsp;    boolean update(int key, byte[] newValue, int valueOffset, int addressInBuffer) {
+<b class="fc">&nbsp;        int savedKey = byteBuffer.getInt(addressInBuffer);</b>
+<b class="fc">&nbsp;        if (savedKey != key) {</b>
+<b class="fc">&nbsp;            return false;</b>
+&nbsp;        }
+<b class="fc">&nbsp;        System.arraycopy(newValue, valueOffset, byteBuffer.array(), addressInBuffer + Config.KEY_SIZE, valueSize);</b>
+<b class="fc">&nbsp;        return true;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Always call this from a synchronised context, since it will provide a snapshot of data in the
+&nbsp;     * current buffer.
+&nbsp;     */
+&nbsp;    Enumeration&lt;ByteBuffer&gt; iterator(final boolean reverse) {
+<b class="fc">&nbsp;        final ByteBuffer ourBuffer = byteBuffer.duplicate();</b>
+&nbsp;
+&nbsp;        final int recordsToRead;
+<b class="fc">&nbsp;        if (byteBuffer.position() &gt; 0) {</b>
+<b class="fc">&nbsp;            recordsToRead = RecordUtility.addressToIndex(recordSize, byteBuffer.position());</b>
+&nbsp;        } else {
+<b class="fc">&nbsp;            recordsToRead = 0;</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return new Enumeration&lt;ByteBuffer&gt;() {</b>
+<b class="fc">&nbsp;            int currentRecordIndex = reverse ? recordsToRead : 0;</b>
+&nbsp;
+&nbsp;            @Override
+&nbsp;            public boolean hasMoreElements() {
+<b class="fc">&nbsp;                if (reverse) {</b>
+<b class="fc">&nbsp;                    return currentRecordIndex != 0;</b>
+&nbsp;                } else {
+<b class="fc">&nbsp;                    return currentRecordIndex &lt; recordsToRead;</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;
+&nbsp;            @Override
+&nbsp;            public ByteBuffer nextElement() {
+&nbsp;                final int position;
+<b class="fc">&nbsp;                if (reverse) {</b>
+<b class="fc">&nbsp;                    position = (int) RecordUtility.indexToAddress(recordSize, --currentRecordIndex);</b>
+&nbsp;                } else {
+<b class="fc">&nbsp;                    position = (int) RecordUtility.indexToAddress(recordSize, currentRecordIndex++);</b>
+&nbsp;                }
+<b class="fc">&nbsp;                ourBuffer.position(position);</b>
+<b class="fc">&nbsp;                return ourBuffer;</b>
+&nbsp;            }
+&nbsp;        };
+&nbsp;    }
+&nbsp;
+&nbsp;    private void closeBlock() {
+<b class="fc">&nbsp;        final CRC32 crc32 = new CRC32();</b>
+<b class="fc">&nbsp;        final int blockSize = recordSize * Config.RECORDS_PER_BLOCK;</b>
+<b class="fc">&nbsp;        crc32.update(byteBuffer.array(), byteBuffer.position() - blockSize, blockSize);</b>
+<b class="fc">&nbsp;        byteBuffer.putInt((int) crc32.getValue());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public static byte[] getSyncMarker(final int valueSize) {
+<b class="fc">&nbsp;        final ByteBuffer syncMarker = ByteBuffer.allocate(valueSize + Config.KEY_SIZE);</b>
+<b class="fc">&nbsp;        Arrays.fill(syncMarker.array(), (byte) 0xFF);</b>
+<b class="fc">&nbsp;        syncMarker.putInt(RESERVED_KEY_MARKER);  // This will override the first four bytes.</b>
+<b class="fc">&nbsp;        return syncMarker.array();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    protected void insertSyncMarker() {
+<b class="fc">&nbsp;        byteBuffer.put(getSyncMarker(valueSize));</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void clear() {
+<b class="fc">&nbsp;        byteBuffer = ByteBuffer.allocate(byteBuffer.capacity());</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2023-05-25 02:15</div>
+</div>
+</body>
+</html>

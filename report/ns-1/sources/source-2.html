@@ -1,0 +1,217 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > CompactionState</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.storage.engine</a>
+</div>
+
+<h1>Coverage Summary for Class: CompactionState (com.storage.engine)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">CompactionState</td>
+<td class="coverageStat">
+  <span class="percent">
+    23,1%
+  </span>
+  <span class="absValue">
+    (3/13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    37,5%
+  </span>
+  <span class="absValue">
+    (6/16)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$4687EY8W</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$Ahprwjcd</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$bR2hXJtr</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$CWrULYmX</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$EtafIXPG</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$lP9jWg5k</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$MgN40Dm6</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$NtMuKyeM</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$Ul7tU77f</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$V9UiRu9o</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$W8841EzZ</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$xN3uh3cM</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$Z1QYWp13</td>
+  </tr>
+  <tr>
+    <td class="name">CompactionState$MockitoMock$1147340847$auxiliary$ZtLRmgCO</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    23,1%
+  </span>
+  <span class="absValue">
+    (3/13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    37,5%
+  </span>
+  <span class="absValue">
+    (6/16)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.storage.engine;
+&nbsp;
+&nbsp;import java.io.File;
+&nbsp;import java.util.BitSet;
+&nbsp;
+<b class="fc">&nbsp;class CompactionState {</b>
+&nbsp;    public static final int TIME = 30 * 60000;
+<b class="fc">&nbsp;    private final long begin = System.currentTimeMillis();</b>
+&nbsp;    long nextFileRecordIndex;
+<b class="fc">&nbsp;    BitSet dataInNextFile = new BitSet();</b>
+<b class="fc">&nbsp;    BitSet dataInNextWalFile = new BitSet();</b>
+&nbsp;    File nextWalFile;
+&nbsp;    File nextDataFile;
+&nbsp;
+&nbsp;    public long getNextFileRecordIndex() {
+<b class="nc">&nbsp;        return nextFileRecordIndex;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void setNextFileRecordIndex(long nextFileRecordIndex) {
+<b class="nc">&nbsp;        this.nextFileRecordIndex = nextFileRecordIndex;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public BitSet getDataInNextFile() {
+<b class="nc">&nbsp;        return dataInNextFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void setDataInNextFile(BitSet dataInNextFile) {
+<b class="nc">&nbsp;        this.dataInNextFile = dataInNextFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public BitSet getDataInNextWalFile() {
+<b class="nc">&nbsp;        return dataInNextWalFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    boolean isLimitation() {
+<b class="fc">&nbsp;        return System.currentTimeMillis() - begin &gt; TIME;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void setDataInNextWalFile(BitSet dataInNextWalFile) {
+<b class="nc">&nbsp;        this.dataInNextWalFile = dataInNextWalFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public File getNextWalFile() {
+<b class="nc">&nbsp;        return nextWalFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public long getBegin() {
+<b class="fc">&nbsp;        return begin;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void setNextWalFile(File nextWalFile) {
+<b class="nc">&nbsp;        this.nextWalFile = nextWalFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public File getNextDataFile() {
+<b class="nc">&nbsp;        return nextDataFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void setNextDataFile(File nextDataFile) {
+<b class="nc">&nbsp;        this.nextDataFile = nextDataFile;</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2023-05-25 02:15</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,291 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > BlockUtility</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.storage.engine.utilities</a>
+</div>
+
+<h1>Coverage Summary for Class: BlockUtility (com.storage.engine.utilities)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">BlockUtility</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    66,7%
+  </span>
+  <span class="absValue">
+    (2/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    40,3%
+  </span>
+  <span class="absValue">
+    (31/77)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.storage.engine.utilities;
+&nbsp;
+&nbsp;import com.storage.engine.Buffer;
+&nbsp;import com.storage.engine.Config;
+&nbsp;
+&nbsp;import java.io.BufferedInputStream;
+&nbsp;import java.io.BufferedOutputStream;
+&nbsp;import java.io.DataInputStream;
+&nbsp;import java.io.DataOutputStream;
+&nbsp;import java.io.File;
+&nbsp;import java.io.FileInputStream;
+&nbsp;import java.io.FileOutputStream;
+&nbsp;import java.io.IOException;
+&nbsp;import java.io.RandomAccessFile;
+&nbsp;import java.nio.file.Files;
+&nbsp;import java.nio.file.StandardCopyOption;
+&nbsp;import java.util.ArrayDeque;
+&nbsp;import java.util.zip.CRC32;
+&nbsp;
+&nbsp;import org.slf4j.Logger;
+&nbsp;import org.slf4j.LoggerFactory;
+&nbsp;
+&nbsp;/**
+&nbsp; * Utilities to recover blocks from a corrupted file.
+&nbsp; */
+&nbsp;public class BlockUtility {
+&nbsp;
+&nbsp;    private BlockUtility() {
+&nbsp;    }
+&nbsp;
+<b class="fc">&nbsp;    private static final Logger LOG = LoggerFactory.getLogger(BlockUtility.class);</b>
+&nbsp;
+&nbsp;    static File rewriteBlocks(final File dirty, final int valueSize) throws IOException {
+<b class="nc">&nbsp;        LOG.info(&quot;Attempting to recover data in {}&quot;, dirty);</b>
+<b class="nc">&nbsp;        final int recordSize = valueSize + Config.KEY_SIZE;</b>
+<b class="nc">&nbsp;        final File newFile = new File(dirty.getParentFile(), dirty.getName() + &quot;.recovered&quot;);</b>
+&nbsp;
+<b class="nc">&nbsp;        final byte[] syncMarker = Buffer.getSyncMarker(valueSize);</b>
+<b class="nc">&nbsp;        long blocksRecovered = 0;</b>
+&nbsp;
+<b class="nc">&nbsp;        try (final RandomAccessFile in = new RandomAccessFile(dirty, &quot;r&quot;);</b>
+<b class="nc">&nbsp;                final DataOutputStream out = new DataOutputStream(</b>
+&nbsp;                        new BufferedOutputStream(new FileOutputStream(newFile, false)))) {
+<b class="nc">&nbsp;            final ArrayDeque&lt;Byte&gt; syncMarkerBuffer = new ArrayDeque&lt;&gt;(syncMarker.length);</b>
+&nbsp;
+<b class="nc">&nbsp;            final CRC32 crc32 = new CRC32();</b>
+&nbsp;
+&nbsp;            while (true) {
+<b class="nc">&nbsp;                if (syncMarkerBuffer.size() == syncMarker.length) {</b>
+&nbsp;                    // Pointing to a sync marker - verify.
+<b class="nc">&nbsp;                    if (ByteUtility.arrayEquals(syncMarker, syncMarkerBuffer)) {</b>
+&nbsp;                        // Start calculating the crc for the next N bytes, and verify.
+<b class="nc">&nbsp;                        final byte[] data = new byte[Config.RECORDS_PER_BLOCK * recordSize];</b>
+&nbsp;
+<b class="nc">&nbsp;                        if (in.read(data) != data.length) {</b>
+&nbsp;                            // Corrupted.
+&nbsp;                            // We touched EOF, signalling a partial write.
+&nbsp;                            // The last block was unfortunately lost.
+<b class="nc">&nbsp;                            break;</b>
+&nbsp;                        }
+<b class="nc">&nbsp;                        crc32.reset();</b>
+<b class="nc">&nbsp;                        crc32.update(data);</b>
+&nbsp;
+&nbsp;                        // Validate CRC32.
+<b class="nc">&nbsp;                        if (in.readInt() != (int) crc32.getValue()) {</b>
+&nbsp;                            // Rewind the file so that we find the next sync marker.
+&nbsp;                            // Rewind such that we can find the next sync marker starting
+&nbsp;                            // from the first byte of the last sync marker.
+<b class="nc">&nbsp;                            in.seek(in.getFilePointer() - data.length - syncMarker.length - 4 + 1);</b>
+<b class="nc">&nbsp;                            syncMarkerBuffer.clear();</b>
+<b class="nc">&nbsp;                            continue;</b>
+&nbsp;                        }
+&nbsp;
+<b class="nc">&nbsp;                        out.write(syncMarker);</b>
+<b class="nc">&nbsp;                        out.write(data);</b>
+<b class="nc">&nbsp;                        out.writeInt((int) (crc32.getValue()));</b>
+<b class="nc">&nbsp;                        syncMarkerBuffer.clear();</b>
+<b class="nc">&nbsp;                        blocksRecovered++;</b>
+<b class="nc">&nbsp;                    } else {</b>
+&nbsp;                        // Misalignment of the data in the middle of the file.
+<b class="nc">&nbsp;                        syncMarkerBuffer.removeFirst();</b>
+&nbsp;                    }
+&nbsp;                } else {
+<b class="nc">&nbsp;                    int data = in.read();</b>
+<b class="nc">&nbsp;                    if (data == -1) {</b>
+&nbsp;                        // No more data to be read!
+<b class="nc">&nbsp;                        break;</b>
+&nbsp;                    }
+<b class="nc">&nbsp;                    syncMarkerBuffer.add((byte) (data &amp; 0xFF));</b>
+<b class="nc">&nbsp;                }</b>
+&nbsp;            }
+&nbsp;
+<b class="nc">&nbsp;            out.flush();</b>
+<b class="nc">&nbsp;        }</b>
+&nbsp;
+<b class="nc">&nbsp;        LOG.info(&quot;Successfully recovered {} block(s) from {}&quot;, blocksRecovered, dirty);</b>
+&nbsp;
+<b class="nc">&nbsp;        return newFile;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Ensures that all blocks in the data and the WAL file match their CRC32 checksums. If they
+&nbsp;     * don&#39;t, reconstruct the file with only valid blocks.
+&nbsp;     * &lt;p&gt;
+&nbsp;     * If the data file is reconstructed, it will also replace that file atomically.
+&nbsp;     *
+&nbsp;     * @return Either the same file (if intact), otherwise a different file containing recovered
+&nbsp;     * data.
+&nbsp;     */
+&nbsp;    public static File verifyBlocks(final File dirty, final int valueSize) throws IOException {
+<b class="fc">&nbsp;        if (!dirty.exists() || dirty.length() == 0) {</b>
+<b class="fc">&nbsp;            return dirty;</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        final int recordSize = valueSize + Config.KEY_SIZE;</b>
+&nbsp;
+<b class="fc">&nbsp;        final byte[] syncMarker = Buffer.getSyncMarker(valueSize);</b>
+&nbsp;
+<b class="fc">&nbsp;        boolean corrupted = false;</b>
+&nbsp;
+<b class="fc">&nbsp;        try (final DataInputStream in = new DataInputStream(new BufferedInputStream(</b>
+&nbsp;                new FileInputStream(dirty)))) {
+&nbsp;
+<b class="fc">&nbsp;            final ArrayDeque&lt;Byte&gt; syncMarkerBuffer = new ArrayDeque&lt;&gt;(syncMarker.length);</b>
+&nbsp;
+<b class="fc">&nbsp;            long validBlocks = 0;</b>
+&nbsp;
+<b class="fc">&nbsp;            final CRC32 crc32 = new CRC32();</b>
+&nbsp;
+&nbsp;            while (true) {
+<b class="fc">&nbsp;                if (syncMarkerBuffer.size() == syncMarker.length) {</b>
+&nbsp;                    // We&#39;re pointing to a sync marker - verify.
+<b class="fc">&nbsp;                    if (ByteUtility.arrayEquals(syncMarker, syncMarkerBuffer)) {</b>
+&nbsp;                        // Start calculating the crc for the next N bytes, and verify.
+<b class="fc">&nbsp;                        final byte[] data = new byte[Config.RECORDS_PER_BLOCK * recordSize];</b>
+&nbsp;
+<b class="fc">&nbsp;                        if (in.read(data) != data.length) {</b>
+&nbsp;                            // Corrupted.
+<b class="nc">&nbsp;                            corrupted = true;</b>
+<b class="nc">&nbsp;                            break;</b>
+&nbsp;                        }
+<b class="fc">&nbsp;                        crc32.reset();</b>
+<b class="fc">&nbsp;                        crc32.update(data);</b>
+&nbsp;
+&nbsp;                        // Validate CRC32.
+<b class="fc">&nbsp;                        if (in.readInt() != (int) crc32.getValue()) {</b>
+<b class="nc">&nbsp;                            corrupted = true;</b>
+<b class="nc">&nbsp;                            break;</b>
+&nbsp;                        }
+&nbsp;
+<b class="fc">&nbsp;                        validBlocks++;</b>
+<b class="fc">&nbsp;                        syncMarkerBuffer.clear();</b>
+<b class="fc">&nbsp;                    } else {</b>
+<b class="nc">&nbsp;                        corrupted = true;</b>
+<b class="nc">&nbsp;                        break;</b>
+&nbsp;                    }
+&nbsp;                } else {
+<b class="fc">&nbsp;                    int data = in.read();</b>
+<b class="fc">&nbsp;                    if (data == -1) {</b>
+&nbsp;                        // No more data to be read!
+<b class="fc">&nbsp;                        break;</b>
+&nbsp;                    }
+<b class="fc">&nbsp;                    syncMarkerBuffer.add((byte) (data &amp; 0xFF));</b>
+<b class="fc">&nbsp;                }</b>
+&nbsp;            }
+&nbsp;
+&nbsp;            // Validate blocks with file size.
+<b class="fc">&nbsp;            if (!corrupted) {</b>
+<b class="fc">&nbsp;                final long expectedSize = validBlocks * recordSize * Config.RECORDS_PER_BLOCK</b>
+&nbsp;                        + (validBlocks * (Config.CRC_SIZE + recordSize));
+<b class="fc">&nbsp;                if (expectedSize != dirty.length()) {</b>
+<b class="nc">&nbsp;                    corrupted = true;</b>
+&nbsp;                }
+&nbsp;            }
+<b class="fc">&nbsp;        }</b>
+&nbsp;
+<b class="fc">&nbsp;        if (corrupted) {</b>
+<b class="nc">&nbsp;            final File reconstructed = rewriteBlocks(dirty, valueSize);</b>
+<b class="nc">&nbsp;            Files.move(reconstructed.toPath(), dirty.toPath(),</b>
+&nbsp;                    StandardCopyOption.REPLACE_EXISTING,
+&nbsp;                    StandardCopyOption.ATOMIC_MOVE);
+&nbsp;
+<b class="nc">&nbsp;            return new File(dirty.getAbsolutePath());</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return dirty;</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2023-05-25 02:15</div>
+</div>
+</body>
+</html>

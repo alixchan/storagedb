@@ -1,0 +1,137 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > IndexMapImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.storage.engine.map</a>
+</div>
+
+<h1>Coverage Summary for Class: IndexMapImpl (com.storage.engine.map)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">IndexMapImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (5/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (6/6)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.storage.engine.map;
+&nbsp;
+&nbsp;import com.storage.engine.StorageDB;
+&nbsp;import gnu.trove.map.hash.TIntIntHashMap;
+&nbsp;
+&nbsp;public class IndexMapImpl implements IndexMap {
+&nbsp;    private final TIntIntHashMap indexMap;
+&nbsp;    private static final int CAPACITY = 100_000;
+&nbsp;    private static final float LOAD_FACTOR = 0.95F;
+&nbsp;
+&nbsp;    public IndexMapImpl() {
+<b class="fc">&nbsp;        this(CAPACITY, LOAD_FACTOR);</b>
+&nbsp;    }
+&nbsp;
+<b class="fc">&nbsp;    public IndexMapImpl(int initialCapacity, float loadFactor) {</b>
+<b class="fc">&nbsp;        indexMap = new TIntIntHashMap(initialCapacity, loadFactor, StorageDB.RESERVED_KEY_MARKER,</b>
+&nbsp;                StorageDB.RESERVED_KEY_MARKER);
+&nbsp;    }
+&nbsp;
+&nbsp;    @Override
+&nbsp;    public void put(int key, int indexValue) {
+<b class="fc">&nbsp;        indexMap.put(key, indexValue);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @Override
+&nbsp;    public int get(int key) {
+<b class="fc">&nbsp;        return indexMap.get(key);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @Override
+&nbsp;    public int size() {
+<b class="fc">&nbsp;        return indexMap.size();</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2023-05-25 02:15</div>
+</div>
+</body>
+</html>

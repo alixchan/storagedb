@@ -1,0 +1,208 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > StorageDBBuilder</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.storage.engine</a>
+</div>
+
+<h1>Coverage Summary for Class: StorageDBBuilder (com.storage.engine)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">StorageDBBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (13/13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (42/42)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.storage.engine;
+&nbsp;
+&nbsp;import com.storage.engine.exceptions.ConfigException;
+&nbsp;import com.storage.engine.map.IndexMap;
+&nbsp;
+&nbsp;import java.io.IOException;
+&nbsp;import java.nio.file.Path;
+&nbsp;
+<b class="fc">&nbsp;public class StorageDBBuilder {</b>
+&nbsp;
+<b class="fc">&nbsp;    final Config conf = new Config();</b>
+&nbsp;
+&nbsp;    public StorageDBBuilder withAutoCompactDisabled() {
+<b class="fc">&nbsp;        conf.autoCompact = false;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withValueSize(int valueSize) {
+<b class="fc">&nbsp;        conf.valueSize = valueSize;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withDbDir(String dbDir) {
+<b class="fc">&nbsp;        conf.dbDir = dbDir;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withCompactionWaitTimeoutMs(long compactionWaitTimeoutMs) {
+<b class="fc">&nbsp;        conf.compactionWaitTimeoutMs = compactionWaitTimeoutMs;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withMinBuffersToCompact(int minBuffersToCompact) {
+<b class="fc">&nbsp;        conf.minBuffersToCompact = minBuffersToCompact;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withDataToWalFileRatio(int dataToWalFileRatio) {
+<b class="fc">&nbsp;        conf.dataToWalFileRatio = dataToWalFileRatio;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withBufferFlushTimeoutMs(long bufferFlushTimeoutMs) {
+<b class="fc">&nbsp;        conf.bufferFlushTimeoutMs = bufferFlushTimeoutMs;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withMaxBufferSize(int maxBufferSize) {
+<b class="fc">&nbsp;        conf.maxBufferSize = maxBufferSize;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withIndexMap(IndexMap indexMap) {
+<b class="fc">&nbsp;        conf.indexMap = indexMap;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withDbDir(Path path) {
+<b class="fc">&nbsp;        return withDbDir(path.toString());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDBBuilder withMaxOpenFDCount(int openFDCount) {
+<b class="fc">&nbsp;        conf.openFDCount = openFDCount;</b>
+<b class="fc">&nbsp;        return this;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public StorageDB build() throws IOException {
+<b class="fc">&nbsp;        if (conf.dbDir == null || conf.dbDir.isEmpty()) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Directory path cannot be empty or null.&quot;);</b>
+&nbsp;        }
+<b class="fc">&nbsp;        if (conf.valueSize == 0) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;ValueSize cannot be 0.&quot;);</b>
+&nbsp;        }
+<b class="fc">&nbsp;        if (conf.compactionWaitTimeoutMs &lt; Config.MIN_COMPACTION_WAIT_TIMEOUT_MS) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Compaction timeout cannot be less than &quot; +</b>
+&nbsp;                    Config.MIN_COMPACTION_WAIT_TIMEOUT_MS);
+&nbsp;        }
+<b class="fc">&nbsp;        if (conf.bufferFlushTimeoutMs &lt; 0) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Buffer flush timeout cannot be less than 0&quot;);</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        if (conf.minBuffersToCompact &lt; Config.FLOOR_MIN_BUFFERS_TO_COMPACT) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Min buffers to compact cannot be less than &quot; +</b>
+&nbsp;                    Config.FLOOR_MIN_BUFFERS_TO_COMPACT);
+&nbsp;        }
+<b class="fc">&nbsp;        if (conf.dataToWalFileRatio &lt; Config.MIN_DATA_TO_WAL_FILE_RATIO) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Data to wal size ratio cannot be less than &quot; +</b>
+&nbsp;                    Config.MIN_DATA_TO_WAL_FILE_RATIO);
+&nbsp;        }
+<b class="fc">&nbsp;        if (conf.dataToWalFileRatio &gt; Config.MAX_DATA_TO_WAL_FILE_RATIO) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Data to wal size ratio cannot be greater than &quot; +</b>
+&nbsp;                    Config.MAX_DATA_TO_WAL_FILE_RATIO);
+&nbsp;        }
+<b class="fc">&nbsp;        if (conf.openFDCount &gt; Config.MAX_OPEN_FD_COUNT) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Open FD count cannot be greater than &quot; +</b>
+&nbsp;                    Config.MAX_OPEN_FD_COUNT);
+&nbsp;        }
+<b class="fc">&nbsp;        if (conf.openFDCount &lt; Config.MIN_OPEN_FD_COUNT) {</b>
+<b class="fc">&nbsp;            throw new ConfigException(&quot;Open FD count cannot be less than &quot; +</b>
+&nbsp;                    Config.MIN_OPEN_FD_COUNT);
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return new StorageDB(conf);</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2023-05-25 02:15</div>
+</div>
+</body>
+</html>

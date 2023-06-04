@@ -1,0 +1,864 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > StorageDB</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.storage.engine</a>
+</div>
+
+<h1>Coverage Summary for Class: StorageDB (com.storage.engine)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">StorageDB</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    88,2%
+  </span>
+  <span class="absValue">
+    (30/34)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    70,2%
+  </span>
+  <span class="absValue">
+    (252/359)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.storage.engine;
+&nbsp;
+&nbsp;import com.storage.engine.exceptions.*;
+&nbsp;import com.storage.engine.exceptions.RetainedKeyException;
+&nbsp;import com.storage.engine.file_access.RandomAccessFileWrapper;
+&nbsp;import com.storage.engine.map.IndexMapImpl;
+&nbsp;import com.storage.engine.map.IndexMap;
+&nbsp;import com.storage.engine.file_access.RandomAccessFilePool;
+&nbsp;import com.storage.engine.utilities.BlockUtility;
+&nbsp;import com.storage.engine.utilities.ByteUtility;
+&nbsp;import com.storage.engine.utilities.RecordUtility;
+&nbsp;import java.io.BufferedOutputStream;
+&nbsp;import java.io.DataOutputStream;
+&nbsp;import java.io.File;
+&nbsp;import java.io.FileNotFoundException;
+&nbsp;import java.io.FileOutputStream;
+&nbsp;import java.io.IOException;
+&nbsp;import java.io.OutputStream;
+&nbsp;import java.io.RandomAccessFile;
+&nbsp;import java.nio.ByteBuffer;
+&nbsp;import java.nio.file.Files;
+&nbsp;import java.nio.file.Path;
+&nbsp;import java.nio.file.StandardCopyOption;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.BitSet;
+&nbsp;import java.util.Enumeration;
+&nbsp;import java.util.List;
+&nbsp;import java.util.concurrent.ExecutorService;
+&nbsp;import java.util.concurrent.Executors;
+&nbsp;import java.util.concurrent.TimeUnit;
+&nbsp;import java.util.concurrent.locks.ReentrantReadWriteLock;
+&nbsp;import java.util.function.Consumer;
+&nbsp;
+&nbsp;import org.slf4j.Logger;
+&nbsp;import org.slf4j.LoggerFactory;
+&nbsp;
+&nbsp;/**
+&nbsp; * Protocol: key (4 bytes) | value (fixed bytes).
+&nbsp; * &lt;p&gt;
+&nbsp; * Notes:
+&nbsp; * &lt;ul&gt;
+&nbsp; *     &lt;li&gt;0xffffffff is reserved for internal structures (used as the sync marker)&lt;/li&gt;
+&nbsp; * &lt;/ul&gt;
+&nbsp; * &lt;p&gt;
+&nbsp; */
+<b class="fc">&nbsp;public class StorageDB {</b>
+&nbsp;
+&nbsp;    public static final int RESERVED_KEY_MARKER = 0xffffffff;
+&nbsp;
+&nbsp;    private static final String FILE_NAME_DATA = &quot;data&quot;;
+&nbsp;    private static final String FILE_NAME_WAL = &quot;wal&quot;;
+&nbsp;    private static final String FILE_TYPE_NEXT = &quot;.next&quot;;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Key: The actual key within this KV store.
+&nbsp;     * &lt;p&gt;
+&nbsp;     * Value: The offset (either in the data file, or in the WAL file)
+&nbsp;     */
+&nbsp;    private final IndexMap index;
+&nbsp;
+<b class="fc">&nbsp;    private BitSet dataInWalFile = new BitSet();</b>
+&nbsp;
+<b class="fc">&nbsp;    private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();</b>
+&nbsp;
+&nbsp;    private final RandomAccessFilePool filePool;
+&nbsp;
+&nbsp;    private final Buffer buffer;
+&nbsp;    private long lastBufferFlushTimeMs;
+&nbsp;
+&nbsp;    private final int recordSize;
+&nbsp;
+<b class="fc">&nbsp;    private long bytesInWalFile = -1; // Will be initialised on the first write.</b>
+&nbsp;    private final File dbDirFile;
+&nbsp;    private final Config conf;
+&nbsp;    CompactionState compactionState;
+&nbsp;
+&nbsp;    private File dataFile;
+&nbsp;    private File walFile;
+&nbsp;
+&nbsp;    private DataOutputStream walOut;
+&nbsp;
+&nbsp;    private Thread tWorker;
+&nbsp;    private final Object compactionSync;
+<b class="fc">&nbsp;    private final Object compactionLock = new Object();</b>
+<b class="fc">&nbsp;    private boolean shutDown = false;</b>
+<b class="fc">&nbsp;    private boolean useExecutorService = false; // We need this flag if using ES is done mid-way.</b>
+&nbsp;
+<b class="fc">&nbsp;    Throwable exceptionDuringBackgroundOps = null;</b>
+&nbsp;
+<b class="fc">&nbsp;    private static final Logger LOG = LoggerFactory.getLogger(StorageDB.class);</b>
+&nbsp;
+&nbsp;    // Common executor service stuff
+&nbsp;    private static ExecutorService executorService;
+<b class="fc">&nbsp;    private static final ArrayList&lt;StorageDB&gt; instancesServed = new ArrayList&lt;&gt;();</b>
+<b class="fc">&nbsp;    private static final Object commonCompactionSync = new Object();</b>
+<b class="fc">&nbsp;    private static boolean esShutDown = false;</b>
+&nbsp;
+<b class="fc">&nbsp;    StorageDB(final Config config) throws IOException {</b>
+<b class="fc">&nbsp;        conf = config;</b>
+<b class="fc">&nbsp;        dbDirFile = new File(conf.getDbDir());</b>
+&nbsp;        //noinspection ResultOfMethodCallIgnored
+<b class="fc">&nbsp;        dbDirFile.mkdirs();</b>
+&nbsp;
+<b class="fc">&nbsp;        if (conf.getIndexMap() == null) {</b>
+<b class="fc">&nbsp;            index = new IndexMapImpl();</b>
+&nbsp;        } else {
+<b class="fc">&nbsp;            index = conf.getIndexMap();</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        recordSize = conf.getValueSize() + Config.KEY_SIZE;</b>
+&nbsp;
+<b class="fc">&nbsp;        buffer = new Buffer(conf, false);</b>
+<b class="fc">&nbsp;        lastBufferFlushTimeMs = System.currentTimeMillis();</b>
+&nbsp;
+<b class="fc">&nbsp;        filePool = new RandomAccessFilePool(conf.getOpenFDCount());</b>
+&nbsp;
+<b class="fc">&nbsp;        dataFile = new File(dbDirFile.getAbsolutePath() + File.separator + FILE_NAME_DATA);</b>
+<b class="fc">&nbsp;        walFile = new File(dbDirFile.getAbsolutePath() + File.separator + FILE_NAME_WAL);</b>
+&nbsp;
+&nbsp;        // Open DB.
+<b class="fc">&nbsp;        final File metaFile = new File(conf.getDbDir() + &quot;/meta&quot;);</b>
+<b class="fc">&nbsp;        if (metaFile.exists()) {</b>
+&nbsp;            // Ensure that the valueSize has not changed.
+<b class="fc">&nbsp;            final byte[] bytes = Files.readAllBytes(metaFile.toPath());</b>
+<b class="fc">&nbsp;            final ByteBuffer meta = ByteBuffer.wrap(bytes);</b>
+<b class="fc">&nbsp;            final int valueSizeFromMeta = meta.getInt();</b>
+<b class="fc">&nbsp;            if (valueSizeFromMeta != conf.getValueSize()) {</b>
+<b class="fc">&nbsp;                throw new ConfigException(&quot;The path &quot; + conf.getDbDir()</b>
+&nbsp;                        + &quot; contains database with the value size &quot;
+&nbsp;                        + valueSizeFromMeta + &quot; bytes. &quot;
+<b class="fc">&nbsp;                        + &quot;However, &quot; + conf.getValueSize() + &quot; bytes was provided!&quot;);</b>
+&nbsp;            }
+<b class="fc">&nbsp;        } else {</b>
+&nbsp;            // New database. Write value size to the meta.
+<b class="fc">&nbsp;            final ByteBuffer out = ByteBuffer.allocate(4);</b>
+<b class="fc">&nbsp;            out.putInt(conf.getValueSize());</b>
+<b class="fc">&nbsp;            Files.write(metaFile.toPath(), out.array());</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        initWalOut();</b>
+&nbsp;
+<b class="fc">&nbsp;        recover();</b>
+<b class="fc">&nbsp;        buildIndex();</b>
+&nbsp;
+<b class="fc">&nbsp;        if (executorService == null) {</b>
+<b class="fc">&nbsp;            compactionSync = new Object();</b>
+<b class="fc">&nbsp;            tWorker = new Thread(() -&gt; {</b>
+<b class="fc">&nbsp;                while (!shutDown) {</b>
+&nbsp;                    try {
+<b class="fc">&nbsp;                        synchronized (compactionSync) {</b>
+<b class="fc">&nbsp;                            compactionSync.wait(conf.getCompactionWaitTimeoutMs());</b>
+<b class="fc">&nbsp;                        }</b>
+<b class="fc">&nbsp;                        if (conf.autoCompactEnabled() &amp;&amp; shouldCompact()) {</b>
+<b class="nc">&nbsp;                            LOG.info(&quot;Auto Compacting now.&quot;);</b>
+<b class="nc">&nbsp;                            compact();</b>
+<b class="fc">&nbsp;                        } else if (shouldFlushBuffer()) {</b>
+<b class="fc">&nbsp;                            LOG.info(&quot;Flushing buffer to disk on timeout.&quot;);</b>
+<b class="fc">&nbsp;                            flush();</b>
+&nbsp;                        }
+<b class="fc">&nbsp;                    } catch (Throwable e) { // NOSONAR - there&#39;s nothing else that we can do.</b>
+<b class="fc">&nbsp;                        LOG.error(&quot;Compaction failure!&quot;, e);</b>
+<b class="fc">&nbsp;                        exceptionDuringBackgroundOps = e;</b>
+<b class="fc">&nbsp;                    }</b>
+&nbsp;                }
+&nbsp;            });
+<b class="fc">&nbsp;            tWorker.start();</b>
+&nbsp;        } else {
+<b class="fc">&nbsp;            useExecutorService = true;</b>
+<b class="fc">&nbsp;            synchronized (instancesServed) {</b>
+<b class="fc">&nbsp;                instancesServed.add(this);</b>
+<b class="fc">&nbsp;            }</b>
+<b class="fc">&nbsp;            compactionSync = commonCompactionSync;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    public static void initExecutorService(int nThreads) {
+&nbsp;        // We will create 1 extra thread to accommodate the poll/wait thread
+<b class="fc">&nbsp;        StorageDB.executorService = Executors.newFixedThreadPool(nThreads + 1);</b>
+<b class="fc">&nbsp;        executorService.submit(() -&gt; {</b>
+<b class="fc">&nbsp;            esShutDown = false;</b>
+<b class="fc">&nbsp;            while (!esShutDown) {</b>
+<b class="fc">&nbsp;                synchronized (commonCompactionSync) {</b>
+&nbsp;                    try {
+<b class="fc">&nbsp;                        commonCompactionSync</b>
+<b class="fc">&nbsp;                                .wait(Config.getDefaultCompactionWaitTimeoutMs());</b>
+<b class="nc">&nbsp;                    } catch (InterruptedException e) {</b>
+&nbsp;                        // Ignore this one.
+<b class="nc">&nbsp;                        LOG.error(&quot;Interrupted while waiting for the &quot;</b>
+&nbsp;                                + &quot;common compaction sync lock&quot;, e);
+&nbsp;
+<b class="nc">&nbsp;                        synchronized (instancesServed) {</b>
+<b class="nc">&nbsp;                            for (StorageDB storageDB : instancesServed) {</b>
+<b class="nc">&nbsp;                                storageDB.exceptionDuringBackgroundOps = e;</b>
+<b class="nc">&nbsp;                            }</b>
+<b class="nc">&nbsp;                        }</b>
+&nbsp;
+<b class="nc">&nbsp;                        executorService.shutdown(); // So that no more databases can be added.</b>
+&nbsp;                        // Don&#39;t swallow the interruption: https://www.ibm.com/developerworks/java/library/j-jtp05236/index.html?ca=drs-#2.1
+<b class="nc">&nbsp;                        Thread.currentThread().interrupt();</b>
+<b class="fc">&nbsp;                    }</b>
+<b class="fc">&nbsp;                }</b>
+<b class="fc">&nbsp;                synchronized (instancesServed) {</b>
+<b class="fc">&nbsp;                    for (StorageDB storageDB : instancesServed) {</b>
+&nbsp;                        try {
+<b class="fc">&nbsp;                            if (storageDB.conf.autoCompactEnabled() &amp;&amp; storageDB.shouldCompact()) {</b>
+<b class="nc">&nbsp;                                LOG.info(&quot;Auto Compacting now.&quot;);</b>
+<b class="nc">&nbsp;                                executorService.submit(() -&gt; {</b>
+&nbsp;                                    try {
+<b class="nc">&nbsp;                                        storageDB.compact();</b>
+<b class="nc">&nbsp;                                    } catch (IOException e) {</b>
+<b class="nc">&nbsp;                                        storageDB.exceptionDuringBackgroundOps = e;</b>
+<b class="nc">&nbsp;                                        LOG.error(&quot;Failed to compact!&quot;, e);</b>
+<b class="nc">&nbsp;                                    }</b>
+&nbsp;                                });
+<b class="fc">&nbsp;                            } else if (storageDB.shouldFlushBuffer()) {</b>
+<b class="fc">&nbsp;                                LOG.info(&quot;Flushing buffer to disk on timeout.&quot;);</b>
+<b class="fc">&nbsp;                                storageDB.flush();</b>
+&nbsp;                            }
+<b class="nc">&nbsp;                        } catch (IOException e) {</b>
+<b class="nc">&nbsp;                            storageDB.exceptionDuringBackgroundOps = e;</b>
+<b class="nc">&nbsp;                            LOG.error(&quot;Failed to flush an open buffer!&quot;, e);</b>
+<b class="fc">&nbsp;                        }</b>
+<b class="fc">&nbsp;                    }</b>
+<b class="fc">&nbsp;                }</b>
+&nbsp;            }
+&nbsp;        });
+&nbsp;    }
+&nbsp;
+&nbsp;    private void initWalOut() throws FileNotFoundException {
+<b class="fc">&nbsp;        walOut = new DataOutputStream(new FileOutputStream(walFile, true));</b>
+<b class="fc">&nbsp;        bytesInWalFile = walFile.length();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean shouldFlushBuffer() {
+<b class="fc">&nbsp;        return System.currentTimeMillis() - lastBufferFlushTimeMs &gt; conf</b>
+<b class="fc">&nbsp;                .getBufferFlushTimeoutMs();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean shouldCompact() {
+<b class="fc">&nbsp;        rwLock.readLock().lock();</b>
+&nbsp;        try {
+<b class="fc">&nbsp;            if (isWalFileBigEnough(</b>
+<b class="fc">&nbsp;                    isCompactionInProgress() ? compactionState.nextWalFile : walFile)) {</b>
+<b class="nc">&nbsp;                return true;</b>
+&nbsp;            }
+&nbsp;        } finally {
+<b class="fc">&nbsp;            rwLock.readLock().unlock();</b>
+<b class="fc">&nbsp;        }</b>
+<b class="fc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean isWalFileBigEnough(File walFile) {
+<b class="fc">&nbsp;        if (walFile.exists()) {</b>
+<b class="fc">&nbsp;            final long walLength = walFile.length();</b>
+<b class="fc">&nbsp;            if (walLength &gt;= conf.getMinBuffersToCompact() * buffer.capacity()) {</b>
+<b class="nc">&nbsp;                if (!dataFile.exists()) {</b>
+<b class="nc">&nbsp;                    return true;</b>
+&nbsp;                } else {
+&nbsp;                    // We should compare with data file irrespective of whether compaction is in progress
+&nbsp;                    // It will be an aprox measure during compaction, but we will have to live with that.
+<b class="nc">&nbsp;                    return walFile.length() * conf.getDataToWalFileRatio() &gt;= dataFile.length();</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;        }
+<b class="fc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private void buildIndex() throws IOException {
+<b class="fc">&nbsp;        rwLock.readLock().lock();</b>
+&nbsp;        try {
+&nbsp;            // Iterating data first ensures bitsets are not needed.
+<b class="fc">&nbsp;            LOG.info(&quot;Building index for the data file.&quot;);</b>
+<b class="fc">&nbsp;            buildIndexFromFile(false);</b>
+<b class="fc">&nbsp;            LOG.info(&quot;Building index for the wal file.&quot;);</b>
+<b class="fc">&nbsp;            buildIndexFromFile(true);</b>
+<b class="fc">&nbsp;            LOG.info(&quot;Finished building index.&quot;);</b>
+&nbsp;        } finally {
+<b class="fc">&nbsp;            rwLock.readLock().unlock();</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private void buildIndexFromFile(boolean isWal) throws IOException {
+<b class="fc">&nbsp;        final Buffer reader = new Buffer(conf, true);</b>
+&nbsp;
+&nbsp;        // First figure right file to read.
+<b class="fc">&nbsp;        File file = isWal ? walFile : dataFile;</b>
+&nbsp;
+<b class="fc">&nbsp;        if (file.exists()) {</b>
+<b class="fc">&nbsp;            final RandomAccessFileWrapper wrapper = filePool.borrowObject(file);</b>
+&nbsp;
+<b class="fc">&nbsp;            final int[] fileIndex = {0};</b>
+&nbsp;            // Always iterate forward even for wal. In case of wal, entries are overwritten.
+&nbsp;            // A small price to pay for not needing bitsets.
+&nbsp;            try {
+<b class="fc">&nbsp;                reader.readFromFile(wrapper, false, entry -&gt; {</b>
+<b class="fc">&nbsp;                    final int key = entry.getInt();</b>
+<b class="fc">&nbsp;                    index.put(key, fileIndex[0]++);</b>
+<b class="fc">&nbsp;                    if (isWal) {</b>
+<b class="fc">&nbsp;                        dataInWalFile.set(key);</b>
+&nbsp;                    }
+&nbsp;                });
+&nbsp;            } finally {
+<b class="fc">&nbsp;                filePool.returnObject(file, wrapper);</b>
+<b class="fc">&nbsp;            }</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Recovers the database if it&#39;s corrupted.
+&nbsp;     * &lt;p&gt;
+&nbsp;     * Calling this brings the database to a state where exactly two files exist: the WAL file, and
+&nbsp;     * the data file.
+&nbsp;     */
+&nbsp;    private void recover() throws IOException {
+&nbsp;        // If the database was shutdown during a compaction, delete data.next,
+&nbsp;        // and append wal.next to wal.
+<b class="fc">&nbsp;        final File nextWalFile = new File(dbDirFile.getAbsolutePath()</b>
+&nbsp;                + File.separator + FILE_NAME_WAL + FILE_TYPE_NEXT);
+&nbsp;
+<b class="fc">&nbsp;        boolean nextWalFileDeleted = false;</b>
+&nbsp;
+<b class="fc">&nbsp;        if (nextWalFile.exists()) {</b>
+&nbsp;            // Safe, since walOut is always opened in an append only mode.
+<b class="nc">&nbsp;            Files.copy(nextWalFile.toPath(), walOut);</b>
+<b class="nc">&nbsp;            walOut.flush();</b>
+<b class="nc">&nbsp;            initWalOut(); // Will update the byte count.</b>
+<b class="nc">&nbsp;            Files.delete(nextWalFile.toPath());</b>
+<b class="nc">&nbsp;            nextWalFileDeleted = true;</b>
+&nbsp;        }
+&nbsp;
+&nbsp;        // If a next data file exists, but no corresponding nextWalFile, then it
+&nbsp;        // means that just towards the end of the last compaction, the nextWalFile was deleted,
+&nbsp;        // but the rename of next data file failed. Don&#39;t delete, but simply treat the next data
+&nbsp;        // as a part of the WAL file.
+<b class="fc">&nbsp;        final File nextDataFile = new File(dbDirFile.getAbsolutePath() + File.separator +</b>
+&nbsp;                FILE_NAME_DATA + FILE_TYPE_NEXT);
+&nbsp;
+<b class="fc">&nbsp;        if (nextDataFile.exists() &amp;&amp; !nextWalFileDeleted) {</b>
+&nbsp;            // Safe, since walOut is always opened in an append only mode.
+<b class="nc">&nbsp;            Files.copy(nextDataFile.toPath(), walOut);</b>
+<b class="nc">&nbsp;            walOut.flush();</b>
+<b class="nc">&nbsp;            initWalOut(); // Will update the byte count.</b>
+&nbsp;
+<b class="nc">&nbsp;            Files.delete(nextDataFile.toPath());</b>
+&nbsp;        }
+&nbsp;
+&nbsp;        // Let&#39;s run a sequential scan and verify the two files.
+&nbsp;        {
+<b class="fc">&nbsp;            final File verifiedWalFile = BlockUtility.verifyBlocks(walFile, conf.getValueSize());</b>
+<b class="fc">&nbsp;            if (verifiedWalFile != walFile) {</b>
+<b class="nc">&nbsp;                walFile = verifiedWalFile;</b>
+<b class="nc">&nbsp;                initWalOut();</b>
+&nbsp;            }
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        dataFile = BlockUtility.verifyBlocks(dataFile, conf.getValueSize());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Moves a file atomically.
+&nbsp;     *
+&nbsp;     * @return A reference to the destination
+&nbsp;     */
+&nbsp;    private Path move(final File file, final File destination) throws IOException {
+<b class="nc">&nbsp;        return Files.move(file.toPath(), destination.toPath(),</b>
+&nbsp;                StandardCopyOption.REPLACE_EXISTING,
+&nbsp;                StandardCopyOption.ATOMIC_MOVE);
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * This should always be called from synchronized context.
+&nbsp;     *
+&nbsp;     * @return If compaction is in progress
+&nbsp;     */
+&nbsp;    private boolean isCompactionInProgress() {
+<b class="fc">&nbsp;        return compactionState != null;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void compact() throws IOException {
+<b class="fc">&nbsp;        synchronized (compactionLock) {</b>
+<b class="fc">&nbsp;            final long start = System.currentTimeMillis();</b>
+&nbsp;
+&nbsp;            // 1. Move wal to wal.prev and create new wal file.
+<b class="fc">&nbsp;            rwLock.writeLock().lock();</b>
+&nbsp;            try {
+&nbsp;                // First flush all data.
+&nbsp;                // This is because we will be resetting bytesInWalFile below and we need to get all
+&nbsp;                // buffer to file so that their offsets are honoured.
+<b class="fc">&nbsp;                flush();</b>
+&nbsp;
+<b class="fc">&nbsp;                LOG.info(&quot;Beginning compaction with bytesInWalFile={}&quot;, bytesInWalFile);</b>
+&nbsp;                // Check whether there was any data coming in. If not simply bail out.
+<b class="fc">&nbsp;                if (bytesInWalFile == 0) {</b>
+&nbsp;                    return;
+&nbsp;                }
+&nbsp;
+<b class="nc">&nbsp;                compactionState = new CompactionState();</b>
+&nbsp;
+<b class="nc">&nbsp;                compactionState.nextWalFile = new File(dbDirFile.getAbsolutePath()</b>
+&nbsp;                        + File.separator + FILE_NAME_WAL + FILE_TYPE_NEXT);
+&nbsp;
+&nbsp;                // Create new walOut File
+<b class="nc">&nbsp;                walOut = new DataOutputStream(new FileOutputStream(compactionState.nextWalFile));</b>
+<b class="nc">&nbsp;                bytesInWalFile = 0;</b>
+<b class="nc">&nbsp;                compactionState.nextFileRecordIndex = 0;</b>
+&nbsp;
+&nbsp;            } finally {
+<b class="fc">&nbsp;                rwLock.writeLock().unlock();</b>
+<b class="nc">&nbsp;            }</b>
+&nbsp;
+&nbsp;            // 2. Process wal.current file and out to data.next file.
+&nbsp;            // 3. Process data.current file.
+<b class="nc">&nbsp;            compactionState.nextDataFile = new File(dbDirFile.getAbsolutePath() + File.separator +</b>
+&nbsp;                    FILE_NAME_DATA + FILE_TYPE_NEXT);
+&nbsp;
+<b class="nc">&nbsp;            try (final BufferedOutputStream out =</b>
+&nbsp;                    new BufferedOutputStream(new FileOutputStream(compactionState.nextDataFile),
+<b class="nc">&nbsp;                            buffer.getWriteBufferSize())) {</b>
+&nbsp;
+<b class="nc">&nbsp;                final Buffer tmpBuffer = new Buffer(conf, false);</b>
+&nbsp;
+<b class="nc">&nbsp;                iterate(false, false, (key, data, offset) -&gt; {</b>
+<b class="nc">&nbsp;                    tmpBuffer.add(key, data, offset);</b>
+&nbsp;
+<b class="nc">&nbsp;                    if (tmpBuffer.isFull()) {</b>
+<b class="nc">&nbsp;                        flushNext(out, tmpBuffer);</b>
+&nbsp;                    }
+&nbsp;                });
+&nbsp;
+<b class="nc">&nbsp;                if (tmpBuffer.isDirty()) {</b>
+<b class="nc">&nbsp;                    flushNext(out, tmpBuffer);</b>
+&nbsp;                }
+<b class="nc">&nbsp;            }</b>
+&nbsp;
+<b class="nc">&nbsp;            rwLock.writeLock().lock();</b>
+&nbsp;            try {
+&nbsp;                // First rename prevWalFile and prevDataFile so that .next can be renamed
+<b class="nc">&nbsp;                walFile = move(compactionState.nextWalFile, walFile).toFile();</b>
+<b class="nc">&nbsp;                dataFile = move(compactionState.nextDataFile, dataFile).toFile();</b>
+&nbsp;
+&nbsp;                // Now make bitsets point right.
+<b class="nc">&nbsp;                dataInWalFile = compactionState.dataInNextWalFile;</b>
+&nbsp;
+<b class="nc">&nbsp;                compactionState = null;</b>
+<b class="nc">&nbsp;                filePool.clear();</b>
+&nbsp;            } finally {
+<b class="nc">&nbsp;                rwLock.writeLock().unlock();</b>
+<b class="nc">&nbsp;            }</b>
+&nbsp;
+<b class="nc">&nbsp;            LOG.info(&quot;Compaction completed successfully in {} ms&quot;,</b>
+<b class="nc">&nbsp;                    System.currentTimeMillis() - start);</b>
+<b class="nc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private void flushNext(OutputStream out, Buffer buffer) throws IOException {
+<b class="nc">&nbsp;        buffer.flush(out);</b>
+&nbsp;
+&nbsp;        try {
+<b class="nc">&nbsp;            rwLock.writeLock().lock();</b>
+<b class="nc">&nbsp;            final Enumeration&lt;ByteBuffer&gt; iterator = buffer.iterator(false);</b>
+&nbsp;
+<b class="nc">&nbsp;            while (iterator.hasMoreElements()) {</b>
+<b class="nc">&nbsp;                final ByteBuffer byteBuffer = iterator.nextElement();</b>
+<b class="nc">&nbsp;                final long address = RecordUtility</b>
+<b class="nc">&nbsp;                        .indexToAddress(recordSize, compactionState.nextFileRecordIndex);</b>
+<b class="nc">&nbsp;                compactionState.nextFileRecordIndex++;</b>
+<b class="nc">&nbsp;                final int key = byteBuffer.getInt();</b>
+<b class="nc">&nbsp;                if (!compactionState.dataInNextWalFile.get(key)) {</b>
+<b class="nc">&nbsp;                    index.put(key, RecordUtility.addressToIndex(recordSize, address));</b>
+<b class="nc">&nbsp;                    compactionState.dataInNextFile.set(key);</b>
+&nbsp;                }
+<b class="nc">&nbsp;            }</b>
+&nbsp;        } finally {
+<b class="nc">&nbsp;            rwLock.writeLock().unlock();</b>
+<b class="nc">&nbsp;        }</b>
+&nbsp;
+<b class="nc">&nbsp;        buffer.clear();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void put(final byte[] key, final byte[] value, final int valueOffset)
+&nbsp;            throws IOException {
+<b class="fc">&nbsp;        put(ByteUtility.toInt(key, 0), value, valueOffset);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void put(final byte[] key, final byte[] value) throws IOException {
+<b class="fc">&nbsp;        put(key, value, 0);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void put(int key, byte[] value) throws IOException {
+<b class="fc">&nbsp;        put(key, value, 0);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void put(int key, byte[] value, int valueOffset) throws IOException {
+<b class="fc">&nbsp;        if (exceptionDuringBackgroundOps != null) {</b>
+<b class="fc">&nbsp;            throw new StorageDBRuntimeException(&quot;Will not accept any further writes since the &quot;</b>
+&nbsp;                    + &quot;last compaction resulted in an exception!&quot;, exceptionDuringBackgroundOps);
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        if (key == RESERVED_KEY_MARKER) {</b>
+<b class="fc">&nbsp;            throw new RetainedKeyException(RESERVED_KEY_MARKER);</b>
+&nbsp;        }
+<b class="fc">&nbsp;        rwLock.writeLock().lock();</b>
+&nbsp;
+&nbsp;        try {
+<b class="fc">&nbsp;            boolean updatedInPlace = false;</b>
+&nbsp;
+<b class="fc">&nbsp;            final int recordIndexForKey = index.get(key);</b>
+&nbsp;
+&nbsp;            // Check if the key exists in the WAL file.
+<b class="fc">&nbsp;            if ((recordIndexForKey != RESERVED_KEY_MARKER) &amp;&amp; ((isCompactionInProgress() &amp;&amp; compactionState.dataInNextWalFile.get(key)) || (!isCompactionInProgress() &amp;&amp; dataInWalFile.get(key)))) {</b>
+<b class="fc">&nbsp;                long address =  RecordUtility.indexToAddress(recordSize, recordIndexForKey);</b>
+&nbsp;                // Is the record in the buffer?
+<b class="fc">&nbsp;                if (address &gt;= bytesInWalFile) {</b>
+<b class="fc">&nbsp;                    int addressToUpdateForKey = (int)(address - bytesInWalFile);</b>
+<b class="fc">&nbsp;                    updatedInPlace = buffer.update(key, value, valueOffset, addressToUpdateForKey);</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            if (buffer.isFull()) {</b>
+<b class="fc">&nbsp;                flush();</b>
+&nbsp;                // Let compaction thread eval if there is a need for compaction.
+&nbsp;                // If buffer length is too small, it might result in too many calls.
+<b class="fc">&nbsp;                synchronized (compactionSync) {</b>
+<b class="fc">&nbsp;                    compactionSync.notifyAll();</b>
+<b class="fc">&nbsp;                }</b>
+&nbsp;            }
+&nbsp;
+&nbsp;            // Write to the write buffer.
+<b class="fc">&nbsp;            if (!updatedInPlace) {</b>
+<b class="fc">&nbsp;                final int addressInBuffer = buffer.add(key, value, valueOffset);</b>
+&nbsp;
+&nbsp;
+<b class="fc">&nbsp;                final int recordIndex = RecordUtility.addressToIndex(recordSize,</b>
+&nbsp;                    bytesInWalFile + addressInBuffer);
+<b class="fc">&nbsp;                index.put(key, recordIndex);</b>
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            if (isCompactionInProgress()) {</b>
+<b class="nc">&nbsp;                compactionState.dataInNextWalFile.set(key);</b>
+&nbsp;            } else {
+<b class="fc">&nbsp;                dataInWalFile.set(key);</b>
+&nbsp;            }
+&nbsp;
+&nbsp;        } finally {
+<b class="fc">&nbsp;            rwLock.writeLock().unlock();</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void flush() throws IOException {
+<b class="fc">&nbsp;        rwLock.writeLock().lock();</b>
+&nbsp;        try {
+&nbsp;            // walOut is initialised on the first write to the writeBuffer.
+<b class="fc">&nbsp;            if (walOut == null || !buffer.isDirty()) {</b>
+&nbsp;                return;
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            bytesInWalFile += buffer.flush(walOut);</b>
+<b class="fc">&nbsp;            buffer.clear();</b>
+&nbsp;
+<b class="fc">&nbsp;            lastBufferFlushTimeMs = System.currentTimeMillis();</b>
+&nbsp;
+<b class="fc">&nbsp;            if (isCompactionInProgress() &amp;&amp; compactionState.isLimitation()) {</b>
+&nbsp;                final long secondsSinceStart =
+<b class="fc">&nbsp;                        (System.currentTimeMillis() - compactionState.getBegin()) / 1000;</b>
+<b class="fc">&nbsp;                exceptionDuringBackgroundOps = new StorageDBRuntimeException(</b>
+&nbsp;                        &quot;The last compaction has been running for over &quot; + secondsSinceStart
+&nbsp;                                + &quot; seconds!&quot;);
+&nbsp;            }
+&nbsp;        } finally {
+<b class="fc">&nbsp;            rwLock.writeLock().unlock();</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void iterate(final EntryConsumer consumer) throws IOException {
+<b class="fc">&nbsp;        iterate(true, true, consumer);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private void iterate(final boolean useLatestWalFile, final boolean readInMemoryBuffer,
+&nbsp;            final EntryConsumer consumer) throws IOException {
+<b class="fc">&nbsp;        final ArrayList&lt;RandomAccessFile&gt; walFiles = new ArrayList&lt;&gt;(2);</b>
+<b class="fc">&nbsp;        final ArrayList&lt;RandomAccessFile&gt; dataFiles = new ArrayList&lt;&gt;(1);</b>
+&nbsp;
+<b class="fc">&nbsp;        Enumeration&lt;ByteBuffer&gt; inMemRecords = null;</b>
+<b class="fc">&nbsp;        rwLock.readLock().lock();</b>
+&nbsp;        try {
+<b class="fc">&nbsp;            if (isCompactionInProgress() &amp;&amp; useLatestWalFile) {</b>
+<b class="nc">&nbsp;                final RandomAccessFileWrapper reader = filePool</b>
+<b class="nc">&nbsp;                        .borrowObject(compactionState.nextWalFile);</b>
+<b class="nc">&nbsp;                reader.seek(reader.length());</b>
+<b class="nc">&nbsp;                walFiles.add(reader);</b>
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            if (walFile.exists()) {</b>
+<b class="fc">&nbsp;                final RandomAccessFileWrapper reader = filePool.borrowObject(walFile);</b>
+<b class="fc">&nbsp;                reader.seek(reader.length());</b>
+<b class="fc">&nbsp;                walFiles.add(reader);</b>
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            if (dataFile.exists()) {</b>
+<b class="nc">&nbsp;                final RandomAccessFileWrapper reader = filePool.borrowObject(dataFile);</b>
+<b class="nc">&nbsp;                reader.seek(0);</b>
+<b class="nc">&nbsp;                dataFiles.add(reader);</b>
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            if (readInMemoryBuffer) {</b>
+<b class="fc">&nbsp;                inMemRecords = buffer.iterator(true);</b>
+&nbsp;            }
+&nbsp;        } finally {
+<b class="fc">&nbsp;            rwLock.readLock().unlock();</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;
+<b class="fc">&nbsp;        final BitSet keysRead = new BitSet(index.size());</b>
+&nbsp;
+<b class="fc">&nbsp;        final Consumer&lt;ByteBuffer&gt; entryConsumer = entry -&gt; {</b>
+<b class="fc">&nbsp;            final int key = entry.getInt();</b>
+<b class="fc">&nbsp;            final boolean b = keysRead.get(key);</b>
+<b class="fc">&nbsp;            if (!b) {</b>
+&nbsp;                try {
+<b class="fc">&nbsp;                    consumer.accept(key, entry.array(), entry.position());</b>
+<b class="nc">&nbsp;                } catch (IOException e) {</b>
+<b class="nc">&nbsp;                    throw new StorageDBRuntimeException(e);</b>
+<b class="fc">&nbsp;                }</b>
+<b class="fc">&nbsp;                keysRead.set(key);</b>
+&nbsp;            }
+&nbsp;        };
+&nbsp;
+<b class="fc">&nbsp;        if (readInMemoryBuffer) {</b>
+<b class="fc">&nbsp;            while (inMemRecords.hasMoreElements()) {</b>
+<b class="fc">&nbsp;                final ByteBuffer entry = inMemRecords.nextElement();</b>
+<b class="fc">&nbsp;                entryConsumer.accept(entry);</b>
+<b class="fc">&nbsp;            }</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        final Consumer&lt;List&lt;RandomAccessFile&gt;&gt; returnFiles = files -&gt; {</b>
+<b class="fc">&nbsp;            for (RandomAccessFile file : files) {</b>
+<b class="fc">&nbsp;                assert file instanceof RandomAccessFileWrapper;</b>
+<b class="fc">&nbsp;                filePool.returnObject(((RandomAccessFileWrapper) file).getFile(),</b>
+&nbsp;                        (RandomAccessFileWrapper) file);
+<b class="fc">&nbsp;            }</b>
+&nbsp;        };
+&nbsp;
+<b class="fc">&nbsp;        final Buffer reader = new Buffer(conf, true);</b>
+<b class="fc">&nbsp;        boolean returnDataFilesEarly = true;</b>
+&nbsp;        try {
+<b class="fc">&nbsp;            reader.readFromFiles(walFiles, true, entryConsumer);</b>
+<b class="fc">&nbsp;            returnDataFilesEarly = false;</b>
+&nbsp;        } finally {
+<b class="fc">&nbsp;            returnFiles.accept(walFiles);</b>
+<b class="fc">&nbsp;            if (returnDataFilesEarly) {</b>
+<b class="nc">&nbsp;                returnFiles.accept(dataFiles);</b>
+&nbsp;            }
+<b class="nc">&nbsp;        }</b>
+&nbsp;
+&nbsp;        try {
+<b class="fc">&nbsp;            reader.readFromFiles(dataFiles, false, entryConsumer);</b>
+&nbsp;        } finally {
+<b class="fc">&nbsp;            returnFiles.accept(dataFiles);</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public byte[] randomGet(final int key) throws IOException, StorageDBException {
+&nbsp;        int recordIndex;
+&nbsp;        final RandomAccessFileWrapper f;
+&nbsp;        byte[] value;
+<b class="fc">&nbsp;        rwLock.readLock().lock();</b>
+&nbsp;        final long address;
+&nbsp;        try {
+<b class="fc">&nbsp;            recordIndex = index.get(key);</b>
+<b class="fc">&nbsp;            if (recordIndex == RESERVED_KEY_MARKER) { // No mapping value.</b>
+<b class="fc">&nbsp;                return null; // NOSONAR - returning null is a part of the interface.</b>
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            value = new byte[conf.getValueSize()];</b>
+&nbsp;
+<b class="fc">&nbsp;            if (isCompactionInProgress() &amp;&amp; compactionState.dataInNextWalFile.get(key)) {</b>
+<b class="nc">&nbsp;                address = RecordUtility.indexToAddress(recordSize, recordIndex);</b>
+<b class="nc">&nbsp;                if (address &gt;= bytesInWalFile) {</b>
+<b class="nc">&nbsp;                    System.arraycopy(buffer.array(),</b>
+&nbsp;                            (int) (address - bytesInWalFile + Config.KEY_SIZE),
+<b class="nc">&nbsp;                            value, 0, conf.getValueSize());</b>
+<b class="nc">&nbsp;                    return value;</b>
+&nbsp;                }
+<b class="nc">&nbsp;                f = filePool.borrowObject(compactionState.nextWalFile);</b>
+<b class="fc">&nbsp;            } else if (isCompactionInProgress() &amp;&amp; compactionState.dataInNextFile.get(key)) {</b>
+<b class="nc">&nbsp;                address = RecordUtility.indexToAddress(recordSize, recordIndex);</b>
+<b class="nc">&nbsp;                f = filePool.borrowObject(compactionState.nextDataFile);</b>
+<b class="fc">&nbsp;            } else if (dataInWalFile.get(key)) {</b>
+<b class="fc">&nbsp;                address = RecordUtility.indexToAddress(recordSize, recordIndex);</b>
+&nbsp;                // If compaction is in progress, we can not read in-memory.
+<b class="fc">&nbsp;                if (!isCompactionInProgress() &amp;&amp; address &gt;= bytesInWalFile) {</b>
+<b class="fc">&nbsp;                    System.arraycopy(buffer.array(),</b>
+&nbsp;                            (int) (address - bytesInWalFile + Config.KEY_SIZE),
+<b class="fc">&nbsp;                            value, 0, conf.getValueSize());</b>
+<b class="fc">&nbsp;                    return value;</b>
+&nbsp;                }
+<b class="fc">&nbsp;                f = filePool.borrowObject(walFile);</b>
+&nbsp;            } else {
+<b class="nc">&nbsp;                address = RecordUtility.indexToAddress(recordSize, recordIndex);</b>
+<b class="nc">&nbsp;                f = filePool.borrowObject(dataFile);</b>
+&nbsp;            }
+&nbsp;        } finally {
+<b class="fc">&nbsp;            rwLock.readLock().unlock();</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;
+&nbsp;        try {
+<b class="fc">&nbsp;            f.seek(address);</b>
+<b class="fc">&nbsp;            if (f.readInt() != key) {</b>
+<b class="nc">&nbsp;                throw new IncoherentDataException();</b>
+&nbsp;            }
+<b class="fc">&nbsp;            final int bytesRead = f.read(value);</b>
+<b class="fc">&nbsp;            if (bytesRead != conf.getValueSize()) {</b>
+<b class="nc">&nbsp;                throw new StorageDBException(&quot;Possible data corruption detected! &quot;</b>
+&nbsp;                        + &quot;Re-open the database for automatic recovery!&quot;);
+&nbsp;            }
+<b class="fc">&nbsp;            return value;</b>
+&nbsp;        } finally {
+<b class="fc">&nbsp;            filePool.returnObject(f.getFile(), f);</b>
+<b class="nc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public void close() throws IOException, InterruptedException {
+<b class="fc">&nbsp;        flush();</b>
+<b class="fc">&nbsp;        shutDown = true;</b>
+<b class="fc">&nbsp;        if (useExecutorService) {</b>
+<b class="fc">&nbsp;            synchronized (instancesServed) {</b>
+<b class="fc">&nbsp;                instancesServed.remove(this);</b>
+<b class="fc">&nbsp;            }</b>
+&nbsp;        } else {
+<b class="fc">&nbsp;            synchronized (compactionSync) {</b>
+<b class="fc">&nbsp;                compactionSync.notifyAll();</b>
+<b class="fc">&nbsp;            }</b>
+<b class="fc">&nbsp;            tWorker.join();</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    public static void shutDownExecutorService() throws InterruptedException {
+<b class="fc">&nbsp;        if (executorService != null) {</b>
+<b class="fc">&nbsp;            esShutDown = true;</b>
+<b class="fc">&nbsp;            synchronized (commonCompactionSync) {</b>
+<b class="fc">&nbsp;                commonCompactionSync.notifyAll();</b>
+<b class="fc">&nbsp;            }</b>
+<b class="fc">&nbsp;            executorService.shutdown();</b>
+<b class="fc">&nbsp;            if (!executorService.awaitTermination(5L * 60, TimeUnit.SECONDS)) {</b>
+<b class="nc">&nbsp;                LOG.error(&quot;Unable to shutdown executor service in 5 minutes.&quot;);</b>
+&nbsp;            }
+<b class="fc">&nbsp;            executorService = null;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    public Config getConf() {
+<b class="fc">&nbsp;        return conf;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public boolean isUsingExecutorService() {
+<b class="fc">&nbsp;        return useExecutorService;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public int size() {
+<b class="fc">&nbsp;        return index.size();</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2023-05-25 02:15</div>
+</div>
+</body>
+</html>
