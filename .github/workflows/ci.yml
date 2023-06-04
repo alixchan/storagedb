@@ -28,3 +28,6 @@ jobs:
 
     - name: Run Tests
       run: mvn test
+      
+    - name: Generate Maven Site
+      run: mvn site
